@@ -1,1 +1,0 @@
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Kelaoffc/NixxEmot/refs/heads/main/Nixx%20Free%20Emote.lua"))()
