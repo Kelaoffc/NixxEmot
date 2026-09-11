@@ -1,46 +1,284 @@
--- Fly
-local FlyBtn = createButton("🕊️", "Fly")
-local flying = false
-local ctrl = {f = 0, b = 0, l = 0, r = 0}
-local speed = 50
+-- Fly standalone
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
 
-local function fly()
-    local lp = Players.LocalPlayer
-    local char = lp.Character or lp.CharacterAdded:Wait()
-    local hrp = char:WaitForChild("HumanoidRootPart")
-    local bg = Instance.new("BodyGyro", hrp)
-    local bv = Instance.new("BodyVelocity", hrp)
-    
-    bg.P = 9e4
-    bg.maxTorque = Vector3.new(9e9, 9e9, 9e9)
-    bg.cframe = hrp.CFrame
-    
-    bv.velocity = Vector3.new(0, 0, 0)
-    bv.maxForce = Vector3.new(9e9, 9e9, 9e9)
-    
-    task.spawn(function()
-        while flying and char and hrp and char.Parent do
-            local cam = Workspace.CurrentCamera
-            if ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0 then
-                bv.velocity = ((cam.CFrame.LookVector * (ctrl.f + ctrl.b)) + ((cam.CFrame * CFrame.new(ctrl.l + ctrl.r, (ctrl.f + ctrl.b) * 0.2, 0).Position) - cam.CFrame.Position)) * speed
-                bg.cframe = cam.CFrame
-            else
-                bv.velocity = Vector3.new(0, 0, 0)
-                bg.cframe = cam.CFrame
-            end
-            RunService.RenderStepped:Wait()
-        end
-        bg:Destroy()
-        bv:Destroy()
-    end)
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+local GUI_NAME = "NixxStandaloneFlyGui"
+local GYRO_NAME = "NixxFlyGyro"
+local VELOCITY_NAME = "NixxFlyVelocity"
+
+local oldGui = PlayerGui:FindFirstChild(GUI_NAME)
+if oldGui then
+    oldGui:Destroy()
 end
 
-FlyBtn.MouseButton1Click:Connect(function()
-    flying = not flying
-    if flying then
-        setButtonActive(FlyBtn, true)
-        fly()
-    else
-        setButtonActive(FlyBtn, false)
+local Flying = false
+local FlyConnection = nil
+local FlyBtn = nil
+local FlyGyro = nil
+local FlyVelocity = nil
+local FlyHumanoid = nil
+
+local Controls = {
+    Forward = 0,
+    Backward = 0,
+    Left = 0,
+    Right = 0,
+    Up = 0,
+    Down = 0
+}
+
+local Speed = 50
+
+local function SetButtonState(active)
+    if not FlyBtn or not FlyBtn.Parent then return end
+
+    FlyBtn.Text = active and "Fly: ON" or "Fly: OFF"
+    FlyBtn.BackgroundColor3 = active
+        and Color3.fromRGB(0, 150, 190)
+        or Color3.fromRGB(35, 35, 45)
+end
+
+local function ResetControls()
+    for key in pairs(Controls) do
+        Controls[key] = 0
     end
+end
+
+local function CleanupFlyObjects()
+    if FlyConnection then
+        FlyConnection:Disconnect()
+        FlyConnection = nil
+    end
+
+    if FlyGyro then
+        FlyGyro:Destroy()
+        FlyGyro = nil
+    end
+
+    if FlyVelocity then
+        FlyVelocity:Destroy()
+        FlyVelocity = nil
+    end
+
+    if FlyHumanoid and FlyHumanoid.Parent then
+        FlyHumanoid.AutoRotate = true
+    end
+
+    FlyHumanoid = nil
+end
+
+local function StopFly()
+    Flying = false
+    ResetControls()
+    CleanupFlyObjects()
+    SetButtonState(false)
+end
+
+local function StartFly()
+    if Flying then return true end
+
+    local character = Player.Character or Player.CharacterAdded:Wait()
+    local root = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not root or not humanoid then return false end
+
+    local oldGyro = root:FindFirstChild(GYRO_NAME)
+    if oldGyro then oldGyro:Destroy() end
+
+    local oldVelocity = root:FindFirstChild(VELOCITY_NAME)
+    if oldVelocity then oldVelocity:Destroy() end
+
+    FlyGyro = Instance.new("BodyGyro")
+    FlyGyro.Name = GYRO_NAME
+    FlyGyro.P = 9e4
+    FlyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    FlyGyro.CFrame = root.CFrame
+    FlyGyro.Parent = root
+
+    FlyVelocity = Instance.new("BodyVelocity")
+    FlyVelocity.Name = VELOCITY_NAME
+    FlyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    FlyVelocity.Velocity = Vector3.zero
+    FlyVelocity.Parent = root
+
+    FlyHumanoid = humanoid
+    FlyHumanoid.AutoRotate = false
+    Flying = true
+
+    FlyConnection = RunService.RenderStepped:Connect(function()
+        if not Flying or not root.Parent or not FlyGyro or not FlyVelocity then
+            StopFly()
+            return
+        end
+
+        local camera = Workspace.CurrentCamera
+        if not camera then return end
+
+        local direction =
+            camera.CFrame.LookVector * (Controls.Forward - Controls.Backward)
+            + camera.CFrame.RightVector * (Controls.Right - Controls.Left)
+            + Vector3.new(0, Controls.Up - Controls.Down, 0)
+
+        if direction.Magnitude > 0 then
+            FlyVelocity.Velocity = direction.Unit * Speed
+        else
+            FlyVelocity.Velocity = Vector3.zero
+        end
+
+        FlyGyro.CFrame = CFrame.new(
+            root.Position,
+            root.Position + camera.CFrame.LookVector
+        )
+    end)
+
+    return true
+end
+
+local KeyMap = {
+    [Enum.KeyCode.W] = "Forward",
+    [Enum.KeyCode.Up] = "Forward",
+    [Enum.KeyCode.S] = "Backward",
+    [Enum.KeyCode.Down] = "Backward",
+    [Enum.KeyCode.A] = "Left",
+    [Enum.KeyCode.Left] = "Left",
+    [Enum.KeyCode.D] = "Right",
+    [Enum.KeyCode.Right] = "Right",
+    [Enum.KeyCode.Space] = "Up",
+    [Enum.KeyCode.LeftControl] = "Down",
+    [Enum.KeyCode.RightControl] = "Down"
+}
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+
+    local control = KeyMap[input.KeyCode]
+    if control then
+        Controls[control] = 1
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    local control = KeyMap[input.KeyCode]
+    if control then
+        Controls[control] = 0
+    end
+end)
+
+local FlyGui = Instance.new("ScreenGui")
+FlyGui.Name = GUI_NAME
+FlyGui.ResetOnSpawn = false
+FlyGui.Parent = PlayerGui
+
+local FlyFrame = Instance.new("Frame")
+FlyFrame.Size = UDim2.fromOffset(158, 38)
+FlyFrame.Position = UDim2.new(0, 20, 0.5, 125)
+FlyFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 25)
+FlyFrame.BorderSizePixel = 0
+FlyFrame.Active = true
+FlyFrame.Parent = FlyGui
+
+local FrameCorner = Instance.new("UICorner")
+FrameCorner.CornerRadius = UDim.new(0, 7)
+FrameCorner.Parent = FlyFrame
+
+FlyBtn = Instance.new("TextButton")
+FlyBtn.Size = UDim2.fromOffset(100, 28)
+FlyBtn.Position = UDim2.fromOffset(20, 5)
+FlyBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+FlyBtn.BorderSizePixel = 0
+FlyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+FlyBtn.TextSize = 11
+FlyBtn.Font = Enum.Font.GothamBold
+FlyBtn.Text = "Fly: OFF"
+FlyBtn.Parent = FlyFrame
+
+local ButtonCorner = Instance.new("UICorner")
+ButtonCorner.CornerRadius = UDim.new(0, 5)
+ButtonCorner.Parent = FlyBtn
+
+local DragHandle = Instance.new("TextButton")
+DragHandle.Size = UDim2.fromOffset(14, 28)
+DragHandle.Position = UDim2.fromOffset(3, 5)
+DragHandle.BackgroundTransparency = 1
+DragHandle.BorderSizePixel = 0
+DragHandle.Text = "≡"
+DragHandle.TextColor3 = Color3.fromRGB(150, 150, 165)
+DragHandle.TextSize = 16
+DragHandle.Font = Enum.Font.GothamBold
+DragHandle.Parent = FlyFrame
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.fromOffset(28, 28)
+CloseBtn.Position = UDim2.fromOffset(125, 5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(150, 45, 55)
+CloseBtn.BorderSizePixel = 0
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextSize = 12
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Parent = FlyFrame
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 5)
+CloseCorner.Parent = CloseBtn
+
+local dragging = false
+local dragInput = nil
+local dragStart = nil
+local startPosition = nil
+
+DragHandle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPosition = FlyFrame.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+DragHandle.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        FlyFrame.Position = UDim2.new(
+            startPosition.X.Scale,
+            startPosition.X.Offset + delta.X,
+            startPosition.Y.Scale,
+            startPosition.Y.Offset + delta.Y
+        )
+    end
+end)
+
+FlyBtn.MouseButton1Click:Connect(function()
+    if Flying then
+        StopFly()
+    elseif StartFly() then
+        SetButtonState(true)
+    end
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    StopFly()
+    FlyGui:Destroy()
+end)
+
+Player.CharacterAdded:Connect(function()
+    StopFly()
 end)
