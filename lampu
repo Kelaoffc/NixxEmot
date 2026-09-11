@@ -1,0 +1,67 @@
+-- Lampu Kepala
+local Player = game.Players.LocalPlayer
+
+local LampBtn = createButton("💡", "Lampu")
+local lampOn = false
+local headLamp = nil
+
+-- Buat lampu kepala
+local function addHeadLamp(char)
+    local head = char:FindFirstChild("Head")
+    if not head then return end
+    if char:FindFirstChild("HeadLamp") then return end
+
+    headLamp = Instance.new("Part")
+    headLamp.Name = "HeadLamp"
+    headLamp.Size = Vector3.new(0.5,0.5,0.5)
+    headLamp.Shape = Enum.PartType.Ball
+    headLamp.Color = Color3.fromRGB(255,255,255)
+    headLamp.Material = Enum.Material.Neon
+    headLamp.Anchored = false
+    headLamp.CanCollide = false
+    headLamp.CFrame = head.CFrame * CFrame.new(0,0.8,0)
+    headLamp.Parent = char
+
+    local weld = Instance.new("WeldConstraint")
+    weld.Part0 = head
+    weld.Part1 = headLamp
+    weld.Parent = headLamp
+
+    local light = Instance.new("PointLight")
+    light.Color = Color3.fromRGB(255,255,255)
+    light.Range = 100
+    light.Brightness = 2
+    light.Parent = headLamp
+end
+
+-- Hapus lampu kepala
+local function removeHeadLamp()
+    if headLamp and headLamp.Parent then
+        headLamp:Destroy()
+    end
+    headLamp = nil
+end
+
+-- Toggle Lampu
+LampBtn.MouseButton1Click:Connect(function()
+    lampOn = not lampOn
+    local char = Player.Character or Player.CharacterAdded:Wait()
+    if lampOn then
+        addHeadLamp(char)
+        setButtonActive(LampBtn, true)
+    else
+        removeHeadLamp()
+        setButtonActive(LampBtn, false)
+    end
+end)
+
+-- Kalau respawn, otomatis pasang lagi kalau tombol masih ON
+Player.CharacterAdded:Connect(function(char)
+    if lampOn then
+        task.wait(1)
+        addHeadLamp(char)
+        setButtonActive(LampBtn, true)
+    else
+        setButtonActive(LampBtn, false)
+    end
+end)
