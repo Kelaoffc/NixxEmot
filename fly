@@ -84,6 +84,32 @@ end
 local function GetKeyboardDirection(camera)
     local direction = Vector3.zero
 
+    local lookDirection = camera.CFrame.LookVector
+    local rightDirection = camera.CFrame.RightVector
+
+    local forward = UserInputService:IsKeyDown(Enum.KeyCode.W)
+        or UserInputService:IsKeyDown(Enum.KeyCode.Up)
+    local backward = UserInputService:IsKeyDown(Enum.KeyCode.S)
+        or UserInputService:IsKeyDown(Enum.KeyCode.Down)
+    local left = UserInputService:IsKeyDown(Enum.KeyCode.A)
+        or UserInputService:IsKeyDown(Enum.KeyCode.Left)
+    local right = UserInputService:IsKeyDown(Enum.KeyCode.D)
+        or UserInputService:IsKeyDown(Enum.KeyCode.Right)
+
+    if forward then direction += lookDirection end
+    if backward then direction -= lookDirection end
+    if right then direction += rightDirection end
+    if left then direction -= rightDirection end
+
+    return direction
+end
+
+local function GetJoystickDirection(camera)
+    local humanoidDirection = FlyHumanoid.MoveDirection
+    if humanoidDirection.Magnitude == 0 then
+        return Vector3.zero
+    end
+
     local flatLook = Vector3.new(
         camera.CFrame.LookVector.X,
         0,
@@ -95,19 +121,19 @@ local function GetKeyboardDirection(camera)
         camera.CFrame.RightVector.Z
     )
 
-    if flatLook.Magnitude > 0 then
-        flatLook = flatLook.Unit
-    end
-    if flatRight.Magnitude > 0 then
-        flatRight = flatRight.Unit
+    if flatLook.Magnitude < 0.01 or flatRight.Magnitude < 0.01 then
+        return Vector3.new(humanoidDirection.X, 0, humanoidDirection.Z)
     end
 
-    if KeyState.Forward then direction += flatLook end
-    if KeyState.Backward then direction -= flatLook end
-    if KeyState.Right then direction += flatRight end
-    if KeyState.Left then direction -= flatRight end
+    flatLook = flatLook.Unit
+    flatRight = flatRight.Unit
 
-    return direction
+    local forwardAmount = humanoidDirection:Dot(flatLook)
+    local sideAmount = humanoidDirection:Dot(flatRight)
+
+    -- Arah joystick mengikuti kemiringan kamera, termasuk naik/turun.
+    return camera.CFrame.LookVector * forwardAmount
+        + flatRight * sideAmount
 end
 
 local function StartFly()
@@ -140,20 +166,21 @@ local function StartFly()
         if keyboardDirection.Magnitude > 0 then
             moveDirection = keyboardDirection.Unit
         else
-            local humanoidDirection = FlyHumanoid.MoveDirection
-            moveDirection = Vector3.new(
-                humanoidDirection.X,
-                0,
-                humanoidDirection.Z
-            )
+            moveDirection = GetJoystickDirection(camera)
             if moveDirection.Magnitude > 1 then
                 moveDirection = moveDirection.Unit
             end
         end
 
         local verticalDirection = 0
-        if KeyState.Up then verticalDirection += 1 end
-        if KeyState.Down then verticalDirection -= 1 end
+        local upPressed = UserInputService:IsKeyDown(Enum.KeyCode.Space)
+            or UserInputService:IsKeyDown(Enum.KeyCode.E)
+        local downPressed = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl)
+            or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
+            or UserInputService:IsKeyDown(Enum.KeyCode.Q)
+
+        if upPressed then verticalDirection += 1 end
+        if downPressed then verticalDirection -= 1 end
 
         local finalDirection = moveDirection + Vector3.new(0, verticalDirection, 0)
         if finalDirection.Magnitude > 1 then
