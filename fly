@@ -1,0 +1,46 @@
+-- Fly
+local FlyBtn = createButton("🕊️", "Fly")
+local flying = false
+local ctrl = {f = 0, b = 0, l = 0, r = 0}
+local speed = 50
+
+local function fly()
+    local lp = Players.LocalPlayer
+    local char = lp.Character or lp.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart")
+    local bg = Instance.new("BodyGyro", hrp)
+    local bv = Instance.new("BodyVelocity", hrp)
+    
+    bg.P = 9e4
+    bg.maxTorque = Vector3.new(9e9, 9e9, 9e9)
+    bg.cframe = hrp.CFrame
+    
+    bv.velocity = Vector3.new(0, 0, 0)
+    bv.maxForce = Vector3.new(9e9, 9e9, 9e9)
+    
+    task.spawn(function()
+        while flying and char and hrp and char.Parent do
+            local cam = Workspace.CurrentCamera
+            if ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0 then
+                bv.velocity = ((cam.CFrame.LookVector * (ctrl.f + ctrl.b)) + ((cam.CFrame * CFrame.new(ctrl.l + ctrl.r, (ctrl.f + ctrl.b) * 0.2, 0).Position) - cam.CFrame.Position)) * speed
+                bg.cframe = cam.CFrame
+            else
+                bv.velocity = Vector3.new(0, 0, 0)
+                bg.cframe = cam.CFrame
+            end
+            RunService.RenderStepped:Wait()
+        end
+        bg:Destroy()
+        bv:Destroy()
+    end)
+end
+
+FlyBtn.MouseButton1Click:Connect(function()
+    flying = not flying
+    if flying then
+        setButtonActive(FlyBtn, true)
+        fly()
+    else
+        setButtonActive(FlyBtn, false)
+    end
+end)
