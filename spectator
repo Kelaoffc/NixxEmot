@@ -1,0 +1,190 @@
+-- Spectator / Player Viewer GUI (Compact & Fixed Reset)
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "NixxSpectateGui"
+gui.ResetOnSpawn = false
+gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Main Info Container (Kecil & Di atas pojok kanan)
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 250, 0, 85)
+mainFrame.Position = UDim2.new(1, -265, 0, 8)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+mainFrame.BackgroundTransparency = 0.25
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = gui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(1, 35)
+corner.Parent = mainFrame
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(255, 255, 255)
+stroke.Thickness = 1.5
+stroke.Transparency = 0.5
+stroke.Parent = mainFrame
+
+-- Profile Avatar Image
+local avatarImg = Instance.new("ImageLabel")
+avatarImg.Size = UDim2.new(0, 40, 0, 40)
+avatarImg.Position = UDim2.new(0, 10, 0, 8)
+avatarImg.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+avatarImg.BorderSizePixel = 0
+avatarImg.Parent = mainFrame
+
+local imgCorner = Instance.new("UICorner")
+imgCorner.CornerRadius = UDim.new(1, 0)
+imgCorner.Parent = avatarImg
+
+-- Labels Info
+local nameLabel = Instance.new("TextLabel")
+nameLabel.Size = UDim2.new(0, 180, 0, 18)
+nameLabel.Position = UDim2.new(0, 58, 0, 9)
+nameLabel.BackgroundTransparency = 1
+nameLabel.Font = Enum.Font.GothamBold
+nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+nameLabel.TextSize = 11
+nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+nameLabel.Parent = mainFrame
+
+local ageLabel = Instance.new("TextLabel")
+ageLabel.Size = UDim2.new(0, 180, 0, 16)
+ageLabel.Position = UDim2.new(0, 58, 0, 27)
+ageLabel.BackgroundTransparency = 1
+ageLabel.Font = Enum.Font.Gotham
+ageLabel.TextColor3 = Color3.fromRGB(200, 200, 210)
+ageLabel.TextSize = 10
+ageLabel.TextXAlignment = Enum.TextXAlignment.Left
+ageLabel.Parent = mainFrame
+
+-- Tombol Teleport & Close (X)
+local tpBtn = Instance.new("TextButton")
+tpBtn.Size = UDim2.new(0, 135, 0, 24)
+tpBtn.Position = UDim2.new(0, 15, 0, 53)
+tpBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 240)
+tpBtn.Font = Enum.Font.GothamBold
+tpBtn.Text = "TELEPORT"
+tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+tpBtn.TextSize = 11
+tpBtn.Parent = mainFrame
+Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 6)
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 65, 0, 24)
+closeBtn.Position = UDim2.new(0, 155, 0, 53)
+closeBtn.BackgroundColor3 = Color3.fromRGB(240, 70, 70)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.TextSize = 12
+closeBtn.Parent = mainFrame
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
+
+-- Tombol Navigasi Bawah (<, RESET, >)
+local navContainer = Instance.new("Frame")
+navContainer.Size = UDim2.new(0, 260, 0, 40)
+navContainer.Position = UDim2.new(0.5, -130, 1, -55)
+navContainer.BackgroundTransparency = 1
+navContainer.Parent = gui
+
+local function createNavButton(text, pos, size, color)
+    local btn = Instance.new("TextButton")
+    btn.Size = size
+    btn.Position = pos
+    btn.BackgroundColor3 = color
+    btn.Font = Enum.Font.GothamBold
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Parent = navContainer
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    return btn
+end
+
+local prevBtn = createNavButton("<", UDim2.new(0, 0, 0, 0), UDim2.new(0, 60, 0, 38), Color3.fromRGB(110, 90, 230))
+prevBtn.TextSize = 18
+
+local resetBtn = createNavButton("RESET", UDim2.new(0, 68, 0, 0), UDim2.new(0, 115, 0, 38), Color3.fromRGB(60, 180, 100))
+resetBtn.TextSize = 14
+
+local nextBtn = createNavButton(">", UDim2.new(0, 190, 0, 0), UDim2.new(0, 60, 0, 38), Color3.fromRGB(110, 90, 230))
+nextBtn.TextSize = 18
+
+-- Logika Spectate
+local playerList = {}
+local currentIndex = 1
+
+local function updatePlayerList()
+    playerList = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            table.insert(playerList, p)
+        end
+    end
+end
+
+local function updateSpectate()
+    updatePlayerList()
+    if #playerList == 0 then
+        nameLabel.Text = "Username: None"
+        ageLabel.Text = "Account Age: 0 days"
+        avatarImg.Image = ""
+        Camera.CameraSubject = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+        return
+    end
+    
+    if currentIndex > #playerList then currentIndex = 1 end
+    if currentIndex < 1 then currentIndex = #playerList end
+    
+    local target = playerList[currentIndex]
+    if target and target.Character and target.Character:FindFirstChild("Humanoid") then
+        nameLabel.Text = "Username: " .. target.Name
+        pcall(function()
+            ageLabel.Text = "Account Age: " .. target.AccountAge .. " days"
+        end)
+        
+        local content, isReady = Players:GetUserThumbnailAsync(target.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
+        if isReady then
+            avatarImg.Image = content
+        end
+        
+        Camera.CameraSubject = target.Character.Humanoid
+    end
+end
+
+prevBtn.MouseButton1Click:Connect(function()
+    currentIndex = currentIndex - 1
+    updateSpectate()
+end)
+
+nextBtn.MouseButton1Click:Connect(function()
+    currentIndex = currentIndex + 1
+    updateSpectate()
+end)
+
+-- Tombol RESET mengembalikan kamera ke diri sendiri
+resetBtn.MouseButton1Click:Connect(function()
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        Camera.CameraSubject = LocalPlayer.Character.Humanoid
+    end
+end)
+
+tpBtn.MouseButton1Click:Connect(function()
+    updatePlayerList()
+    local target = playerList[currentIndex]
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if myHrp then
+            myHrp.CFrame = target.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
+        end
+    end
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    Camera.CameraSubject = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+    gui:Destroy()
+end)
+
+updateSpectate()
