@@ -1,0 +1,32 @@
+-- BringPart
+local BringBtn = createButton("🧲", "BringPart")
+local bringing = false
+
+local function bringParts()
+    local lp = Players.LocalPlayer
+    task.spawn(function()
+        while bringing do
+            RunService.Heartbeat:Wait()
+            local char = lp.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                for _, obj in pairs(Workspace:GetDescendants()) do
+                    if obj:IsA("BasePart") and not obj.Anchored and obj.Parent ~= char and not obj:IsDescendantOf(lp.Character) then
+                        obj.CFrame = hrp.CFrame + Vector3.new(0, 5, 0)
+                        obj.Velocity = Vector3.new(0, 0, 0)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+BringBtn.MouseButton1Click:Connect(function()
+    bringing = not bringing
+    if bringing then
+        setButtonActive(BringBtn, true)
+        bringParts()
+    else
+        setButtonActive(BringBtn, false)
+    end
+end)
