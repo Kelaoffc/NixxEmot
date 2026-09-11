@@ -16,6 +16,16 @@ if oldGui then
     oldGui:Destroy()
 end
 
+local currentCharacter = Player.Character
+local currentRoot = currentCharacter and currentCharacter:FindFirstChild("HumanoidRootPart")
+if currentRoot then
+    local oldGyro = currentRoot:FindFirstChild(GYRO_NAME)
+    if oldGyro then oldGyro:Destroy() end
+
+    local oldVelocity = currentRoot:FindFirstChild(VELOCITY_NAME)
+    if oldVelocity then oldVelocity:Destroy() end
+end
+
 local Flying = false
 local FlyConnection = nil
 local FlyBtn = nil
@@ -67,6 +77,7 @@ local function CleanupFlyObjects()
 
     if FlyHumanoid and FlyHumanoid.Parent then
         FlyHumanoid.AutoRotate = true
+        FlyHumanoid.PlatformStand = false
     end
 
     FlyHumanoid = nil
@@ -95,19 +106,20 @@ local function StartFly()
 
     FlyGyro = Instance.new("BodyGyro")
     FlyGyro.Name = GYRO_NAME
-    FlyGyro.P = 9e4
-    FlyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    FlyGyro.P = 3e4
+    FlyGyro.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
     FlyGyro.CFrame = root.CFrame
     FlyGyro.Parent = root
 
     FlyVelocity = Instance.new("BodyVelocity")
     FlyVelocity.Name = VELOCITY_NAME
-    FlyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    FlyVelocity.MaxForce = Vector3.new(1e6, 1e6, 1e6)
     FlyVelocity.Velocity = Vector3.zero
     FlyVelocity.Parent = root
 
     FlyHumanoid = humanoid
     FlyHumanoid.AutoRotate = false
+    FlyHumanoid.PlatformStand = false
     Flying = true
 
     FlyConnection = RunService.RenderStepped:Connect(function()
@@ -117,19 +129,21 @@ local function StartFly()
         end
 
         local camera = Workspace.CurrentCamera
-        if not camera then return end
-
-        local direction =
-            camera.CFrame.LookVector * (Controls.Forward - Controls.Backward)
-            + camera.CFrame.RightVector * (Controls.Right - Controls.Left)
-            + Vector3.new(0, Controls.Up - Controls.Down, 0)
-
-        if direction.Magnitude > 0 then
-            FlyVelocity.Velocity = direction.Unit * Speed
-        else
+        if not camera then
             FlyVelocity.Velocity = Vector3.zero
+            return
         end
 
+        -- Humanoid.MoveDirection sudah mengikuti WASD dan joystick mobile.
+        local moveDirection = humanoid.MoveDirection
+        local horizontal = Vector3.new(moveDirection.X, 0, moveDirection.Z)
+        local vertical = (Controls.Up - Controls.Down) * Speed
+
+        if horizontal.Magnitude > 1 then
+            horizontal = horizontal.Unit
+        end
+
+        FlyVelocity.Velocity = horizontal * Speed + Vector3.new(0, vertical, 0)
         FlyGyro.CFrame = CFrame.new(
             root.Position,
             root.Position + camera.CFrame.LookVector
