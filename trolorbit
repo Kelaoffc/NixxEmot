@@ -1,12 +1,6 @@
 -- =========================================================
 -- NIXX ORBIT TARGET FEATURE
 -- Command ID: orbit_target
---
--- Drop-in feature untuk script NIXX utama.
--- Tempel setelah fungsi GetTargetPlayer() dibuat.
---
--- Dependency dari script utama:
--- Services, LocalPlayer, Toggles, Values, TargetTab, Notify
 -- =========================================================
 
 Toggles.OrbitTarget = false
@@ -44,12 +38,15 @@ local function StartOrbit()
 
     local target = GetTargetPlayer()
     local character = LocalPlayer.Character
+
     local humanoid = character
         and character:FindFirstChildOfClass("Humanoid")
+
     local root = character
         and character:FindFirstChild("HumanoidRootPart")
 
     local targetCharacter = target and target.Character
+
     local targetRoot = targetCharacter
         and targetCharacter:FindFirstChild("HumanoidRootPart")
 
@@ -72,6 +69,7 @@ local function StartOrbit()
     OrbitAngle = 0
     OrbitHumanoid = humanoid
     OrbitSavedAutoRotate = humanoid.AutoRotate
+
     humanoid.AutoRotate = false
 
     Notify("orbit_target aktif: " .. target.DisplayName)
@@ -88,6 +86,7 @@ local function StartOrbit()
         local currentTarget = GetTargetPlayer()
         local currentTargetCharacter = currentTarget
             and currentTarget.Character
+
         local currentTargetRoot = currentTargetCharacter
             and currentTargetCharacter:FindFirstChild("HumanoidRootPart")
 
@@ -99,6 +98,7 @@ local function StartOrbit()
         OrbitAngle += deltaTime * Values.OrbitSpeed
 
         local targetPosition = currentTargetRoot.Position
+
         local offset = Vector3.new(
             math.cos(OrbitAngle) * Values.OrbitDistance,
             0,
