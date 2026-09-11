@@ -12,7 +12,8 @@ local PlayerGui = Player:WaitForChild("PlayerGui")
 
 local GUI_NAME = "NixxStandaloneBringPartGui"
 local SCAN_INTERVAL = 0.25
-local MAX_PARTS_PER_SCAN = 120
+local MAX_PARTS_PER_SCAN = 80
+local BRING_RADIUS = 7
 
 local oldGui = PlayerGui:FindFirstChild(GUI_NAME)
 if oldGui then
@@ -48,11 +49,35 @@ local function SetButtonState(active)
         or Color3.fromRGB(35, 35, 45)
 end
 
+local function IsCharacterPart(part)
+    local model = part and part:FindFirstAncestorOfClass("Model")
+    if not model then return false end
+
+    -- Jangan pernah menarik bagian avatar pemain atau NPC.
+    -- Ini mencegah HumanoidRootPart/limbs ikut terseret dan membuat avatar lag.
+    return model:FindFirstChildOfClass("Humanoid") ~= nil
+end
+
+local function GetBringDestination(root, index)
+    -- Sebarkan benda mengelilingi pemain, jangan menumpuk di satu CFrame.
+    local angle = index * 1.8
+    local layer = math.floor((index - 1) / 8)
+    local radius = BRING_RADIUS + ((index - 1) % 4) * 1.5
+    local height = 3 + layer * 1.75
+
+    return root.CFrame * CFrame.new(
+        math.cos(angle) * radius,
+        height,
+        math.sin(angle) * radius
+    )
+end
+
 local function IsBringablePart(part, character)
     if not part or not part:IsA("BasePart") then return false end
     if part.Anchored then return false end
     if not part.Parent then return false end
     if character and part:IsDescendantOf(character) then return false end
+    if IsCharacterPart(part) then return false end
     if part:IsDescendantOf(Player) then return false end
     local camera = Workspace.CurrentCamera
     if camera and part:IsDescendantOf(camera) then return false end
@@ -65,14 +90,12 @@ local function BringPartBatch()
     if not root then return 0 end
 
     local moved = 0
-    local destination = root.CFrame * CFrame.new(0, 5, 0)
-
     for _, part in ipairs(Workspace:GetDescendants()) do
         if moved >= MAX_PARTS_PER_SCAN then break end
 
         if IsBringablePart(part, character) then
             local success = pcall(function()
-                part.CFrame = destination
+                part.CFrame = GetBringDestination(root, moved + 1)
                 part.AssemblyLinearVelocity = Vector3.zero
                 part.AssemblyAngularVelocity = Vector3.zero
             end)
