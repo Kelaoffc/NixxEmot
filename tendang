@@ -1,30 +1,174 @@
--- Fling
-local FlingBtn = createButton("💥", "Tendang")
-local hiddenfling = false
-local flingThread
+-- Tendang / Fling standalone
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
-local function fling()
-    local lp = Players.LocalPlayer
-    while hiddenfling do
-        RunService.Heartbeat:Wait()
-        local hrp = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            local vel = hrp.Velocity
-            hrp.Velocity = vel * 99999 + Vector3.new(0, 99999, 0)
-            RunService.RenderStepped:Wait()
-            hrp.Velocity = vel
-        end
-    end
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local GUI_NAME = "NixxStandaloneFlingGui"
+
+local oldGui = PlayerGui:FindFirstChild(GUI_NAME)
+if oldGui then
+    oldGui:Destroy()
 end
 
-FlingBtn.MouseButton1Click:Connect(function()
-    hiddenfling = not hiddenfling
-    if hiddenfling then
-        setButtonActive(FlingBtn, true)
-        flingThread = coroutine.create(fling)
-        coroutine.resume(flingThread)
-    else
-        setButtonActive(FlingBtn, false)
+local FlingActive = false
+local FlingThread = nil
+local FlingBtn = nil
+
+local function SetButtonState(active)
+    if not FlingBtn or not FlingBtn.Parent then return end
+
+    FlingBtn.Text = active and "Tendang: ON" or "Tendang: OFF"
+    FlingBtn.BackgroundColor3 = active
+        and Color3.fromRGB(190, 70, 45)
+        or Color3.fromRGB(35, 35, 45)
+end
+
+local function StopFling()
+    FlingActive = false
+    FlingThread = nil
+    SetButtonState(false)
+end
+
+local function StartFling()
+    if FlingActive then return end
+
+    FlingActive = true
+    FlingThread = task.spawn(function()
+        while FlingActive do
+            RunService.Heartbeat:Wait()
+
+            local character = LocalPlayer.Character
+            local root = character and character:FindFirstChild("HumanoidRootPart")
+            if root then
+                local oldVelocity = root.AssemblyLinearVelocity
+
+                root.AssemblyLinearVelocity =
+                    oldVelocity * 99999 + Vector3.new(0, 99999, 0)
+
+                RunService.RenderStepped:Wait()
+
+                if root and root.Parent then
+                    root.AssemblyLinearVelocity = oldVelocity
+                end
+            end
+        end
+    end)
+end
+
+local FlingGui = Instance.new("ScreenGui")
+FlingGui.Name = GUI_NAME
+FlingGui.ResetOnSpawn = false
+FlingGui.Parent = PlayerGui
+
+local FlingFrame = Instance.new("Frame")
+FlingFrame.Size = UDim2.fromOffset(158, 38)
+FlingFrame.Position = UDim2.new(0, 20, 0.5, 25)
+FlingFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 25)
+FlingFrame.BorderSizePixel = 0
+FlingFrame.Active = true
+FlingFrame.Parent = FlingGui
+
+local FrameCorner = Instance.new("UICorner")
+FrameCorner.CornerRadius = UDim.new(0, 7)
+FrameCorner.Parent = FlingFrame
+
+FlingBtn = Instance.new("TextButton")
+FlingBtn.Size = UDim2.fromOffset(100, 28)
+FlingBtn.Position = UDim2.fromOffset(20, 5)
+FlingBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+FlingBtn.BorderSizePixel = 0
+FlingBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+FlingBtn.TextSize = 11
+FlingBtn.Font = Enum.Font.GothamBold
+FlingBtn.Text = "Tendang: OFF"
+FlingBtn.Parent = FlingFrame
+
+local ButtonCorner = Instance.new("UICorner")
+ButtonCorner.CornerRadius = UDim.new(0, 5)
+ButtonCorner.Parent = FlingBtn
+
+local DragHandle = Instance.new("TextButton")
+DragHandle.Size = UDim2.fromOffset(14, 28)
+DragHandle.Position = UDim2.fromOffset(3, 5)
+DragHandle.BackgroundTransparency = 1
+DragHandle.BorderSizePixel = 0
+DragHandle.Text = "≡"
+DragHandle.TextColor3 = Color3.fromRGB(150, 150, 165)
+DragHandle.TextSize = 16
+DragHandle.Font = Enum.Font.GothamBold
+DragHandle.Parent = FlingFrame
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.fromOffset(28, 28)
+CloseBtn.Position = UDim2.fromOffset(125, 5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(150, 45, 55)
+CloseBtn.BorderSizePixel = 0
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextSize = 12
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Parent = FlingFrame
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 5)
+CloseCorner.Parent = CloseBtn
+
+local dragging = false
+local dragInput = nil
+local dragStart = nil
+local startPosition = nil
+
+DragHandle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPosition = FlingFrame.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
     end
 end)
-```[cite: 8]
+
+DragHandle.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        FlingFrame.Position = UDim2.new(
+            startPosition.X.Scale,
+            startPosition.X.Offset + delta.X,
+            startPosition.Y.Scale,
+            startPosition.Y.Offset + delta.Y
+        )
+    end
+end)
+
+FlingBtn.MouseButton1Click:Connect(function()
+    if FlingActive then
+        StopFling()
+    else
+        StartFling()
+        SetButtonState(true)
+    end
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    StopFling()
+    FlingGui:Destroy()
+end)
+
+LocalPlayer.CharacterAdded:Connect(function()
+    StopFling()
+end)
