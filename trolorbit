@@ -1,0 +1,179 @@
+-- =========================================================
+-- NIXX ORBIT TARGET FEATURE
+-- Command ID: orbit_target
+--
+-- Drop-in feature untuk script NIXX utama.
+-- Tempel setelah fungsi GetTargetPlayer() dibuat.
+--
+-- Dependency dari script utama:
+-- Services, LocalPlayer, Toggles, Values, TargetTab, Notify
+-- =========================================================
+
+Toggles.OrbitTarget = false
+Values.OrbitDistance = Values.OrbitDistance or 8
+Values.OrbitSpeed = Values.OrbitSpeed or 1.8
+
+local OrbitConnection = nil
+local OrbitAngle = 0
+local OrbitHumanoid = nil
+local OrbitSavedAutoRotate = true
+
+local function StopOrbit(showNotification)
+    Toggles.OrbitTarget = false
+
+    if OrbitConnection then
+        OrbitConnection:Disconnect()
+        OrbitConnection = nil
+    end
+
+    if OrbitHumanoid and OrbitHumanoid.Parent then
+        OrbitHumanoid.AutoRotate = OrbitSavedAutoRotate
+    end
+
+    OrbitHumanoid = nil
+
+    if showNotification then
+        Notify("orbit_target dihentikan")
+    end
+end
+
+local function StartOrbit()
+    if Toggles.OrbitTarget then
+        return
+    end
+
+    local target = GetTargetPlayer()
+    local character = LocalPlayer.Character
+    local humanoid = character
+        and character:FindFirstChildOfClass("Humanoid")
+    local root = character
+        and character:FindFirstChild("HumanoidRootPart")
+
+    local targetCharacter = target and target.Character
+    local targetRoot = targetCharacter
+        and targetCharacter:FindFirstChild("HumanoidRootPart")
+
+    if not target then
+        Notify("Pilih target dulu!")
+        return
+    end
+
+    if not humanoid or not root then
+        Notify("Karakter kamu belum siap")
+        return
+    end
+
+    if not targetRoot then
+        Notify("Karakter target belum siap")
+        return
+    end
+
+    Toggles.OrbitTarget = true
+    OrbitAngle = 0
+    OrbitHumanoid = humanoid
+    OrbitSavedAutoRotate = humanoid.AutoRotate
+    humanoid.AutoRotate = false
+
+    Notify("orbit_target aktif: " .. target.DisplayName)
+
+    OrbitConnection = Services.RunService.Heartbeat:Connect(function(deltaTime)
+        if not Toggles.OrbitTarget then
+            return
+        end
+
+        local currentCharacter = LocalPlayer.Character
+        local currentRoot = currentCharacter
+            and currentCharacter:FindFirstChild("HumanoidRootPart")
+
+        local currentTarget = GetTargetPlayer()
+        local currentTargetCharacter = currentTarget
+            and currentTarget.Character
+        local currentTargetRoot = currentTargetCharacter
+            and currentTargetCharacter:FindFirstChild("HumanoidRootPart")
+
+        if not currentRoot or not currentTarget or not currentTargetRoot then
+            StopOrbit(true)
+            return
+        end
+
+        OrbitAngle += deltaTime * Values.OrbitSpeed
+
+        local targetPosition = currentTargetRoot.Position
+        local offset = Vector3.new(
+            math.cos(OrbitAngle) * Values.OrbitDistance,
+            0,
+            math.sin(OrbitAngle) * Values.OrbitDistance
+        )
+
+        local orbitPosition = targetPosition + offset
+        local lookPosition = targetPosition + Vector3.new(0, 2, 0)
+
+        currentRoot.CFrame = CFrame.lookAt(
+            orbitPosition,
+            lookPosition
+        )
+
+        currentRoot.AssemblyLinearVelocity = Vector3.zero
+        currentRoot.AssemblyAngularVelocity = Vector3.zero
+    end)
+end
+
+local function ExecuteTargetCommand(command)
+    if command == "orbit_target" then
+        StartOrbit()
+    elseif command == "stop_orbit" then
+        StopOrbit(true)
+    else
+        Notify("Command target tidak dikenal")
+    end
+end
+
+TargetTab:Paragraph({
+    Title = "ORBIT TARGET",
+    Desc = "Command: orbit_target | Mengitari target dengan karakter kamu."
+})
+
+TargetTab:Slider({
+    Title = "Orbit Distance",
+    Value = {
+        Min = 3,
+        Max = 30,
+        Default = Values.OrbitDistance
+    },
+    Step = 1,
+    Callback = function(value)
+        Values.OrbitDistance = value
+    end
+})
+
+TargetTab:Slider({
+    Title = "Orbit Speed",
+    Value = {
+        Min = 0.2,
+        Max = 10,
+        Default = Values.OrbitSpeed
+    },
+    Step = 0.1,
+    Callback = function(value)
+        Values.OrbitSpeed = value
+    end
+})
+
+TargetTab:Toggle({
+    Title = "🌀 Orbit Target",
+    Value = false,
+    Callback = function(state)
+        if state then
+            ExecuteTargetCommand("orbit_target")
+        else
+            ExecuteTargetCommand("stop_orbit")
+        end
+    end
+})
+
+TargetTab:Button({
+    Title = "⏹ Stop Orbit Target",
+    Callback = function()
+        ExecuteTargetCommand("stop_orbit")
+    end
+})
