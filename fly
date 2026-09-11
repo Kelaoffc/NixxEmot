@@ -1,4 +1,7 @@
--- Fly standalone
+-- Fly custom standalone
+-- Gerakan memakai CFrame + Humanoid.MoveDirection.
+-- Tidak memakai BodyVelocity atau BodyGyro.
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -7,42 +10,29 @@ local Workspace = game:GetService("Workspace")
 local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
 
-local GUI_NAME = "NixxStandaloneFlyGui"
-local GYRO_NAME = "NixxFlyGyro"
-local VELOCITY_NAME = "NixxFlyVelocity"
+local GUI_NAME = "NixxCustomFlyGui"
+local FlySpeed = 55
 
 local oldGui = PlayerGui:FindFirstChild(GUI_NAME)
 if oldGui then
     oldGui:Destroy()
 end
 
-local currentCharacter = Player.Character
-local currentRoot = currentCharacter and currentCharacter:FindFirstChild("HumanoidRootPart")
-if currentRoot then
-    local oldGyro = currentRoot:FindFirstChild(GYRO_NAME)
-    if oldGyro then oldGyro:Destroy() end
-
-    local oldVelocity = currentRoot:FindFirstChild(VELOCITY_NAME)
-    if oldVelocity then oldVelocity:Destroy() end
-end
-
 local Flying = false
 local FlyConnection = nil
 local FlyBtn = nil
-local FlyGyro = nil
-local FlyVelocity = nil
 local FlyHumanoid = nil
+local FlyRoot = nil
+local PreviousAutoRotate = true
 
-local Controls = {
-    Forward = 0,
-    Backward = 0,
-    Left = 0,
-    Right = 0,
-    Up = 0,
-    Down = 0
+local KeyState = {
+    Forward = false,
+    Backward = false,
+    Left = false,
+    Right = false,
+    Up = false,
+    Down = false
 }
-
-local Speed = 50
 
 local function SetButtonState(active)
     if not FlyBtn or not FlyBtn.Parent then return end
@@ -53,101 +43,142 @@ local function SetButtonState(active)
         or Color3.fromRGB(35, 35, 45)
 end
 
-local function ResetControls()
-    for key in pairs(Controls) do
-        Controls[key] = 0
+local function ResetKeys()
+    for key in pairs(KeyState) do
+        KeyState[key] = false
     end
 end
 
-local function CleanupFlyObjects()
+local function GetCharacter()
+    local character = Player.Character
+    if not character then return nil, nil, nil end
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local root = character:FindFirstChild("HumanoidRootPart")
+    return character, humanoid, root
+end
+
+local function StopFly()
+    Flying = false
+    ResetKeys()
+
     if FlyConnection then
         FlyConnection:Disconnect()
         FlyConnection = nil
     end
 
-    if FlyGyro then
-        FlyGyro:Destroy()
-        FlyGyro = nil
-    end
-
-    if FlyVelocity then
-        FlyVelocity:Destroy()
-        FlyVelocity = nil
+    if FlyRoot and FlyRoot.Parent then
+        FlyRoot.AssemblyLinearVelocity = Vector3.zero
     end
 
     if FlyHumanoid and FlyHumanoid.Parent then
-        FlyHumanoid.AutoRotate = true
+        FlyHumanoid.AutoRotate = PreviousAutoRotate
         FlyHumanoid.PlatformStand = false
     end
 
     FlyHumanoid = nil
+    FlyRoot = nil
+    SetButtonState(false)
 end
 
-local function StopFly()
-    Flying = false
-    ResetControls()
-    CleanupFlyObjects()
-    SetButtonState(false)
+local function GetKeyboardDirection(camera)
+    local direction = Vector3.zero
+
+    local flatLook = Vector3.new(
+        camera.CFrame.LookVector.X,
+        0,
+        camera.CFrame.LookVector.Z
+    )
+    local flatRight = Vector3.new(
+        camera.CFrame.RightVector.X,
+        0,
+        camera.CFrame.RightVector.Z
+    )
+
+    if flatLook.Magnitude > 0 then
+        flatLook = flatLook.Unit
+    end
+    if flatRight.Magnitude > 0 then
+        flatRight = flatRight.Unit
+    end
+
+    if KeyState.Forward then direction += flatLook end
+    if KeyState.Backward then direction -= flatLook end
+    if KeyState.Right then direction += flatRight end
+    if KeyState.Left then direction -= flatRight end
+
+    return direction
 end
 
 local function StartFly()
     if Flying then return true end
 
-    local character = Player.Character or Player.CharacterAdded:Wait()
-    local root = character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not root or not humanoid then return false end
-
-    local oldGyro = root:FindFirstChild(GYRO_NAME)
-    if oldGyro then oldGyro:Destroy() end
-
-    local oldVelocity = root:FindFirstChild(VELOCITY_NAME)
-    if oldVelocity then oldVelocity:Destroy() end
-
-    FlyGyro = Instance.new("BodyGyro")
-    FlyGyro.Name = GYRO_NAME
-    FlyGyro.P = 3e4
-    FlyGyro.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
-    FlyGyro.CFrame = root.CFrame
-    FlyGyro.Parent = root
-
-    FlyVelocity = Instance.new("BodyVelocity")
-    FlyVelocity.Name = VELOCITY_NAME
-    FlyVelocity.MaxForce = Vector3.new(1e6, 1e6, 1e6)
-    FlyVelocity.Velocity = Vector3.zero
-    FlyVelocity.Parent = root
+    local _, humanoid, root = GetCharacter()
+    if not humanoid or not root then
+        return false
+    end
 
     FlyHumanoid = humanoid
-    FlyHumanoid.AutoRotate = false
-    FlyHumanoid.PlatformStand = false
+    FlyRoot = root
+    PreviousAutoRotate = humanoid.AutoRotate
+    humanoid.AutoRotate = false
+    humanoid.PlatformStand = false
     Flying = true
 
-    FlyConnection = RunService.RenderStepped:Connect(function()
-        if not Flying or not root.Parent or not FlyGyro or not FlyVelocity then
+    FlyConnection = RunService.RenderStepped:Connect(function(deltaTime)
+        if not Flying or not FlyRoot or not FlyRoot.Parent then
             StopFly()
             return
         end
 
         local camera = Workspace.CurrentCamera
-        if not camera then
-            FlyVelocity.Velocity = Vector3.zero
-            return
+        if not camera then return end
+
+        local keyboardDirection = GetKeyboardDirection(camera)
+        local moveDirection
+
+        if keyboardDirection.Magnitude > 0 then
+            moveDirection = keyboardDirection.Unit
+        else
+            local humanoidDirection = FlyHumanoid.MoveDirection
+            moveDirection = Vector3.new(
+                humanoidDirection.X,
+                0,
+                humanoidDirection.Z
+            )
+            if moveDirection.Magnitude > 1 then
+                moveDirection = moveDirection.Unit
+            end
         end
 
-        -- Humanoid.MoveDirection sudah mengikuti WASD dan joystick mobile.
-        local moveDirection = humanoid.MoveDirection
-        local horizontal = Vector3.new(moveDirection.X, 0, moveDirection.Z)
-        local vertical = (Controls.Up - Controls.Down) * Speed
+        local verticalDirection = 0
+        if KeyState.Up then verticalDirection += 1 end
+        if KeyState.Down then verticalDirection -= 1 end
 
-        if horizontal.Magnitude > 1 then
-            horizontal = horizontal.Unit
+        local finalDirection = moveDirection + Vector3.new(0, verticalDirection, 0)
+        if finalDirection.Magnitude > 1 then
+            finalDirection = finalDirection.Unit
         end
 
-        FlyVelocity.Velocity = horizontal * Speed + Vector3.new(0, vertical, 0)
-        FlyGyro.CFrame = CFrame.new(
-            root.Position,
-            root.Position + camera.CFrame.LookVector
+        local nextPosition = FlyRoot.Position
+            + finalDirection * FlySpeed * math.min(deltaTime, 0.05)
+
+        local lookDirection = Vector3.new(
+            camera.CFrame.LookVector.X,
+            0,
+            camera.CFrame.LookVector.Z
         )
+        if lookDirection.Magnitude < 0.01 then
+            lookDirection = Vector3.new(0, 0, -1)
+        else
+            lookDirection = lookDirection.Unit
+        end
+
+        FlyRoot.CFrame = CFrame.lookAt(
+            nextPosition,
+            nextPosition + lookDirection
+        )
+        FlyRoot.AssemblyLinearVelocity = Vector3.zero
     end)
 
     return true
@@ -167,19 +198,17 @@ local KeyMap = {
     [Enum.KeyCode.RightControl] = "Down"
 }
 
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-
-    local control = KeyMap[input.KeyCode]
-    if control then
-        Controls[control] = 1
+UserInputService.InputBegan:Connect(function(input)
+    local key = KeyMap[input.KeyCode]
+    if key then
+        KeyState[key] = true
     end
 end)
 
 UserInputService.InputEnded:Connect(function(input)
-    local control = KeyMap[input.KeyCode]
-    if control then
-        Controls[control] = 0
+    local key = KeyMap[input.KeyCode]
+    if key then
+        KeyState[key] = false
     end
 end)
 
