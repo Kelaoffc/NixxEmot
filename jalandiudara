@@ -1,6 +1,7 @@
 -- Airwalk standalone
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -20,7 +21,8 @@ local AirwalkConnection = nil
 local AirwalkBtn = nil
 
 local function SetButtonState(active)
-    AirwalkBtn.Text = active and "🚶 Jalan di udara: ON" or "🚶 Jalan di udara: OFF"
+    if not AirwalkBtn or not AirwalkBtn.Parent then return end
+    AirwalkBtn.Text = active and "Airwalk: ON" or "Airwalk: OFF"
     AirwalkBtn.BackgroundColor3 = active
         and Color3.fromRGB(0, 170, 90)
         or Color3.fromRGB(35, 35, 45)
@@ -95,20 +97,97 @@ AirwalkGui.Name = GUI_NAME
 AirwalkGui.ResetOnSpawn = false
 AirwalkGui.Parent = PlayerGui
 
+local AirwalkFrame = Instance.new("Frame")
+AirwalkFrame.Size = UDim2.fromOffset(158, 38)
+AirwalkFrame.Position = UDim2.new(0, 20, 0.5, -19)
+AirwalkFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 25)
+AirwalkFrame.BorderSizePixel = 0
+AirwalkFrame.Active = true
+AirwalkFrame.Parent = AirwalkGui
+
+local FrameCorner = Instance.new("UICorner")
+FrameCorner.CornerRadius = UDim.new(0, 7)
+FrameCorner.Parent = AirwalkFrame
+
 AirwalkBtn = Instance.new("TextButton")
-AirwalkBtn.Size = UDim2.fromOffset(190, 40)
-AirwalkBtn.Position = UDim2.new(0, 20, 0.5, -20)
+AirwalkBtn.Size = UDim2.fromOffset(100, 28)
+AirwalkBtn.Position = UDim2.fromOffset(20, 5)
 AirwalkBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
 AirwalkBtn.BorderSizePixel = 0
 AirwalkBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-AirwalkBtn.TextSize = 14
+AirwalkBtn.TextSize = 11
 AirwalkBtn.Font = Enum.Font.GothamBold
-AirwalkBtn.Text = "🚶 Jalan di udara: OFF"
-AirwalkBtn.Parent = AirwalkGui
+AirwalkBtn.Text = "Airwalk: OFF"
+AirwalkBtn.Parent = AirwalkFrame
 
 local Corner = Instance.new("UICorner")
-Corner.CornerRadius = UDim.new(0, 8)
+Corner.CornerRadius = UDim.new(0, 5)
 Corner.Parent = AirwalkBtn
+
+local DragHandle = Instance.new("TextButton")
+DragHandle.Size = UDim2.fromOffset(14, 28)
+DragHandle.Position = UDim2.fromOffset(3, 5)
+DragHandle.BackgroundTransparency = 1
+DragHandle.BorderSizePixel = 0
+DragHandle.Text = "≡"
+DragHandle.TextColor3 = Color3.fromRGB(150, 150, 165)
+DragHandle.TextSize = 16
+DragHandle.Font = Enum.Font.GothamBold
+DragHandle.Parent = AirwalkFrame
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.fromOffset(28, 28)
+CloseBtn.Position = UDim2.fromOffset(125, 5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(150, 45, 55)
+CloseBtn.BorderSizePixel = 0
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextSize = 12
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Parent = AirwalkFrame
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 5)
+CloseCorner.Parent = CloseBtn
+
+local dragging = false
+local dragInput = nil
+local dragStart = nil
+local startPosition = nil
+
+DragHandle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPosition = AirwalkFrame.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+DragHandle.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        AirwalkFrame.Position = UDim2.new(
+            startPosition.X.Scale,
+            startPosition.X.Offset + delta.X,
+            startPosition.Y.Scale,
+            startPosition.Y.Offset + delta.Y
+        )
+    end
+end)
 
 AirwalkBtn.MouseButton1Click:Connect(function()
     if AirwalkActive then
@@ -116,6 +195,11 @@ AirwalkBtn.MouseButton1Click:Connect(function()
     elseif StartAirwalk() then
         SetButtonState(true)
     end
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    StopAirwalk()
+    AirwalkGui:Destroy()
 end)
 
 LocalPlayer.CharacterAdded:Connect(function()
