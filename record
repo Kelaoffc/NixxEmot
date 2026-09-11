@@ -1,68 +1,278 @@
--- Record standalone
+-- NIXX Record - standalone recorder
+-- Merekam posisi dan rotasi HumanoidRootPart, lalu bisa diputar ulang.
+
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+local HttpService = game:GetService("HttpService")
 
 local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
 
-local GUI_NAME = "NixxStandaloneRecordGui"
-local RECORD_URL = "https://airdropwota.io/r1.txt"
+local GUI_NAME = "NixxFullRecordGui"
+local SAVE_FILE = "NixxRecord.json"
+local SAMPLE_RATE = 1 / 20
 
 local oldGui = PlayerGui:FindFirstChild(GUI_NAME)
 if oldGui then
     oldGui:Destroy()
 end
 
-local RecBtn = nil
-local RecordRunning = false
+local Recording = false
+local Playing = false
+local RecordFrames = {}
+local RecordConnection = nil
+local PlaybackThread = nil
+local SavedAutoRotate = true
+local RecordStatus = nil
+local RecordButton = nil
+local PlayButton = nil
+local StopButton = nil
 
-local function SetRecordState(text, color)
-    if not RecBtn or not RecBtn.Parent then return end
-    RecBtn.Text = text
-    RecBtn.BackgroundColor3 = color
+local function SetStatus(message)
+    if RecordStatus and RecordStatus.Parent then
+        RecordStatus.Text = message
+    end
 end
 
-local function RunRecordScript()
-    if RecordRunning then return end
-    RecordRunning = true
-    SetRecordState("Record: ...", Color3.fromRGB(120, 100, 35))
+local function Notify(message)
+    SetStatus(message)
 
-    local success, result = pcall(function()
-        local response = game:HttpGet(RECORD_URL)
-        if type(response) ~= "string" or response == "" then
-            error("response kosong")
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = "NIXX Record",
+            Text = message,
+            Duration = 2
+        })
+    end)
+end
+
+local function GetRootAndHumanoid()
+    local character = Player.Character
+    if not character then return nil, nil end
+
+    return character:FindFirstChild("HumanoidRootPart"),
+        character:FindFirstChildOfClass("Humanoid")
+end
+
+local function FrameToData(cframe, timestamp)
+    return {
+        t = timestamp,
+        c = {cframe:GetComponents()}
+    }
+end
+
+local function DataToCFrame(frame)
+    if not frame or type(frame.c) ~= "table" or #frame.c < 12 then
+        return nil
+    end
+
+    return CFrame.new(table.unpack(frame.c))
+end
+
+local function UpdateButtonStates()
+    if not RecordButton or not RecordButton.Parent then return end
+
+    RecordButton.Text = Recording and "Recording..." or "Record"
+    RecordButton.BackgroundColor3 = Recording
+        and Color3.fromRGB(180, 45, 55)
+        or Color3.fromRGB(35, 35, 45)
+
+    PlayButton.Text = Playing and "Playing..." or "Play"
+    PlayButton.BackgroundColor3 = Playing
+        and Color3.fromRGB(0, 145, 185)
+        or Color3.fromRGB(35, 35, 45)
+
+    StopButton.BackgroundColor3 = (Recording or Playing)
+        and Color3.fromRGB(150, 80, 35)
+        or Color3.fromRGB(35, 35, 45)
+end
+
+local function StopPlayback(showNotification)
+    Playing = false
+    PlaybackThread = nil
+
+    local _, humanoid = GetRootAndHumanoid()
+    if humanoid and humanoid.Parent then
+        humanoid.AutoRotate = SavedAutoRotate
+    end
+
+    UpdateButtonStates()
+    if showNotification then
+        Notify("Playback dihentikan")
+    end
+end
+
+local function StopRecording(showNotification)
+    Recording = false
+
+    if RecordConnection then
+        RecordConnection:Disconnect()
+        RecordConnection = nil
+    end
+
+    UpdateButtonStates()
+    if showNotification then
+        Notify("Record selesai: " .. tostring(#RecordFrames) .. " frame")
+    end
+end
+
+local function StartRecording()
+    if Playing then
+        StopPlayback(false)
+    end
+
+    if Recording then return end
+
+    local root = GetRootAndHumanoid()
+    if not root then
+        Notify("Karakter belum siap")
+        return
+    end
+
+    RecordFrames = {}
+    Recording = true
+    local startedAt = os.clock()
+    local nextSample = 0
+
+    RecordConnection = RunService.Heartbeat:Connect(function()
+        if not Recording then return end
+
+        local currentRoot = GetRootAndHumanoid()
+        if not currentRoot then
+            StopRecording(true)
+            return
         end
 
-        local func, compileError = loadstring(response)
-        if type(func) ~= "function" then
-            error("loadstring gagal: " .. tostring(compileError))
+        local elapsed = os.clock() - startedAt
+        if elapsed >= nextSample then
+            table.insert(
+                RecordFrames,
+                FrameToData(currentRoot.CFrame, elapsed)
+            )
+            nextSample += SAMPLE_RATE
         end
 
-        local executed, runtimeError = pcall(func)
-        if not executed then
-            error("script record error: " .. tostring(runtimeError))
-        end
-
-        return true
+        SetStatus("Merekam... " .. tostring(#RecordFrames) .. " frame")
     end)
 
-    RecordRunning = false
-    if success then
-        SetRecordState("Record: OK", Color3.fromRGB(0, 150, 90))
-        task.delay(2, function()
-            if RecBtn and RecBtn.Parent then
-                SetRecordState("Record", Color3.fromRGB(35, 35, 45))
-            end
-        end)
-    else
-        warn("[NIXX Record] " .. tostring(result))
-        SetRecordState("Record: ERROR", Color3.fromRGB(160, 45, 55))
-        task.delay(2, function()
-            if RecBtn and RecBtn.Parent then
-                SetRecordState("Record", Color3.fromRGB(35, 35, 45))
-            end
-        end)
+    UpdateButtonStates()
+    Notify("Record dimulai")
+end
+
+local function StartPlayback()
+    if Playing then return end
+
+    if Recording then
+        StopRecording(false)
     end
+
+    if #RecordFrames == 0 then
+        Notify("Belum ada hasil record")
+        return
+    end
+
+    local root, humanoid = GetRootAndHumanoid()
+    if not root or not humanoid then
+        Notify("Karakter belum siap")
+        return
+    end
+
+    Playing = true
+    SavedAutoRotate = humanoid.AutoRotate
+    humanoid.AutoRotate = false
+    UpdateButtonStates()
+    Notify("Playback dimulai")
+
+    PlaybackThread = task.spawn(function()
+        local startedAt = os.clock()
+        local frameIndex = 1
+
+        while Playing and frameIndex <= #RecordFrames do
+            local frame = RecordFrames[frameIndex]
+            local targetTime = tonumber(frame.t) or 0
+            local elapsed = os.clock() - startedAt
+
+            if elapsed >= targetTime then
+                local currentRoot = GetRootAndHumanoid()
+                local cframe = DataToCFrame(frame)
+                if currentRoot and cframe then
+                    currentRoot.CFrame = cframe
+                    currentRoot.AssemblyLinearVelocity = Vector3.zero
+                end
+                frameIndex += 1
+            else
+                RunService.Heartbeat:Wait()
+            end
+        end
+
+        if Playing then
+            Playing = false
+            local _, currentHumanoid = GetRootAndHumanoid()
+            if currentHumanoid and currentHumanoid.Parent then
+                currentHumanoid.AutoRotate = SavedAutoRotate
+            end
+            UpdateButtonStates()
+            Notify("Playback selesai")
+        end
+    end)
+end
+
+local function SaveRecord()
+    if #RecordFrames == 0 then
+        Notify("Tidak ada record untuk disimpan")
+        return
+    end
+
+    if not writefile then
+        Notify("Executor tidak mendukung writefile")
+        return
+    end
+
+    local payload = {
+        version = 1,
+        createdAt = os.time(),
+        frameCount = #RecordFrames,
+        frames = RecordFrames
+    }
+
+    local success, err = pcall(function()
+        writefile(SAVE_FILE, HttpService:JSONEncode(payload))
+    end)
+
+    if success then
+        Notify("Tersimpan: " .. SAVE_FILE)
+    else
+        warn("[NIXX Record] Save error: " .. tostring(err))
+        Notify("Gagal menyimpan record")
+    end
+end
+
+local function LoadRecord()
+    if not readfile or not isfile or not isfile(SAVE_FILE) then
+        Notify("File record belum ada")
+        return
+    end
+
+    local success, data = pcall(function()
+        return HttpService:JSONDecode(readfile(SAVE_FILE))
+    end)
+
+    if not success or type(data) ~= "table" or type(data.frames) ~= "table" then
+        Notify("File record rusak")
+        return
+    end
+
+    RecordFrames = data.frames
+    Notify("Loaded: " .. tostring(#RecordFrames) .. " frame")
+end
+
+local function ClearRecord()
+    StopRecording(false)
+    StopPlayback(false)
+    RecordFrames = {}
+    Notify("Record dihapus dari memory")
 end
 
 local RecordGui = Instance.new("ScreenGui")
@@ -70,70 +280,120 @@ RecordGui.Name = GUI_NAME
 RecordGui.ResetOnSpawn = false
 RecordGui.Parent = PlayerGui
 
-local RecordFrame = Instance.new("Frame")
-RecordFrame.Size = UDim2.fromOffset(158, 38)
-RecordFrame.Position = UDim2.new(0, 20, 0.5, 175)
-RecordFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 25)
-RecordFrame.BorderSizePixel = 0
-RecordFrame.Active = true
-RecordFrame.Parent = RecordGui
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.fromOffset(300, 174)
+MainFrame.Position = UDim2.new(0, 20, 0.5, -87)
+MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Parent = RecordGui
 
-local FrameCorner = Instance.new("UICorner")
-FrameCorner.CornerRadius = UDim.new(0, 7)
-FrameCorner.Parent = RecordFrame
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 8)
+MainCorner.Parent = MainFrame
 
-RecBtn = Instance.new("TextButton")
-RecBtn.Size = UDim2.fromOffset(100, 28)
-RecBtn.Position = UDim2.fromOffset(20, 5)
-RecBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-RecBtn.BorderSizePixel = 0
-RecBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-RecBtn.TextSize = 11
-RecBtn.Font = Enum.Font.GothamBold
-RecBtn.Text = "Record"
-RecBtn.Parent = RecordFrame
-
-local ButtonCorner = Instance.new("UICorner")
-ButtonCorner.CornerRadius = UDim.new(0, 5)
-ButtonCorner.Parent = RecBtn
-
-local DragHandle = Instance.new("TextButton")
-DragHandle.Size = UDim2.fromOffset(14, 28)
-DragHandle.Position = UDim2.fromOffset(3, 5)
-DragHandle.BackgroundTransparency = 1
-DragHandle.BorderSizePixel = 0
-DragHandle.Text = "≡"
-DragHandle.TextColor3 = Color3.fromRGB(150, 150, 165)
-DragHandle.TextSize = 16
-DragHandle.Font = Enum.Font.GothamBold
-DragHandle.Parent = RecordFrame
+local Header = Instance.new("TextButton")
+Header.Size = UDim2.new(1, -38, 0, 30)
+Header.Position = UDim2.fromOffset(8, 4)
+Header.BackgroundTransparency = 1
+Header.BorderSizePixel = 0
+Header.Text = "≡  NIXX RECORD"
+Header.TextColor3 = Color3.fromRGB(0, 255, 120)
+Header.TextXAlignment = Enum.TextXAlignment.Left
+Header.TextSize = 12
+Header.Font = Enum.Font.GothamBold
+Header.Parent = MainFrame
 
 local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.fromOffset(28, 28)
-CloseBtn.Position = UDim2.fromOffset(125, 5)
+CloseBtn.Size = UDim2.fromOffset(28, 26)
+CloseBtn.Position = UDim2.new(1, -33, 0, 6)
 CloseBtn.BackgroundColor3 = Color3.fromRGB(150, 45, 55)
 CloseBtn.BorderSizePixel = 0
 CloseBtn.Text = "X"
 CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseBtn.TextSize = 12
 CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.Parent = RecordFrame
+CloseBtn.Parent = MainFrame
 
 local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 5)
 CloseCorner.Parent = CloseBtn
+
+RecordStatus = Instance.new("TextLabel")
+RecordStatus.Size = UDim2.new(1, -20, 0, 22)
+RecordStatus.Position = UDim2.fromOffset(10, 38)
+RecordStatus.BackgroundTransparency = 1
+RecordStatus.Text = "Siap merekam"
+RecordStatus.TextColor3 = Color3.fromRGB(180, 180, 195)
+RecordStatus.TextSize = 10
+RecordStatus.Font = Enum.Font.Gotham
+RecordStatus.TextXAlignment = Enum.TextXAlignment.Left
+RecordStatus.Parent = MainFrame
+
+local function MakeButton(text, x, y, width)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.fromOffset(width, 30)
+    button.Position = UDim2.fromOffset(x, y)
+    button.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    button.BorderSizePixel = 0
+    button.Text = text
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.TextSize = 10
+    button.Font = Enum.Font.GothamBold
+    button.Parent = MainFrame
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 5)
+    corner.Parent = button
+
+    return button
+end
+
+RecordButton = MakeButton("Record", 10, 68, 88)
+StopButton = MakeButton("Stop", 106, 68, 88)
+PlayButton = MakeButton("Play", 202, 68, 88)
+
+local SaveButton = MakeButton("Save", 10, 105, 88)
+local LoadButton = MakeButton("Load", 106, 105, 88)
+local ClearButton = MakeButton("Clear", 202, 105, 88)
+
+local Hint = Instance.new("TextLabel")
+Hint.Size = UDim2.new(1, -20, 0, 18)
+Hint.Position = UDim2.fromOffset(10, 144)
+Hint.BackgroundTransparency = 1
+Hint.Text = "File: " .. SAVE_FILE
+Hint.TextColor3 = Color3.fromRGB(120, 120, 140)
+Hint.TextSize = 9
+Hint.Font = Enum.Font.Code
+Hint.TextXAlignment = Enum.TextXAlignment.Left
+Hint.Parent = MainFrame
+
+RecordButton.MouseButton1Click:Connect(StartRecording)
+StopButton.MouseButton1Click:Connect(function()
+    if Recording then
+        StopRecording(true)
+    elseif Playing then
+        StopPlayback(true)
+    else
+        Notify("Tidak ada proses aktif")
+    end
+end)
+PlayButton.MouseButton1Click:Connect(StartPlayback)
+SaveButton.MouseButton1Click:Connect(SaveRecord)
+LoadButton.MouseButton1Click:Connect(LoadRecord)
+ClearButton.MouseButton1Click:Connect(ClearRecord)
 
 local dragging = false
 local dragInput = nil
 local dragStart = nil
 local startPosition = nil
 
-DragHandle.InputBegan:Connect(function(input)
+Header.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
         dragStart = input.Position
-        startPosition = RecordFrame.Position
+        startPosition = MainFrame.Position
 
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
@@ -143,7 +403,7 @@ DragHandle.InputBegan:Connect(function(input)
     end
 end)
 
-DragHandle.InputChanged:Connect(function(input)
+Header.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement
         or input.UserInputType == Enum.UserInputType.Touch then
         dragInput = input
@@ -153,7 +413,7 @@ end)
 UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
-        RecordFrame.Position = UDim2.new(
+        MainFrame.Position = UDim2.new(
             startPosition.X.Scale,
             startPosition.X.Offset + delta.X,
             startPosition.Y.Scale,
@@ -162,8 +422,14 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
-RecBtn.MouseButton1Click:Connect(RunRecordScript)
-
 CloseBtn.MouseButton1Click:Connect(function()
+    StopRecording(false)
+    StopPlayback(false)
     RecordGui:Destroy()
+end)
+
+Player.CharacterAdded:Connect(function()
+    StopRecording(false)
+    StopPlayback(false)
+    Notify("Karakter respawn, record dihentikan")
 end)
