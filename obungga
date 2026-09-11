@@ -1,0 +1,281 @@
+-- Spectator GUI + Custom Spawn Obunga & Body Laser
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local Workspace = game:GetService("Workspace")
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "NixxSpectateGui"
+gui.ResetOnSpawn = false
+gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Main Info Container (Pojok Kanan Atas)
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 260, 0, 115)
+mainFrame.Position = UDim2.new(1, -275, 0, 8)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+mainFrame.BackgroundTransparency = 0.25
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = gui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(1, 45)
+corner.Parent = mainFrame
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(255, 255, 255)
+stroke.Thickness = 1.5
+stroke.Transparency = 0.5
+stroke.Parent = mainFrame
+
+-- Profile Avatar Image
+local avatarImg = Instance.new("ImageLabel")
+avatarImg.Size = UDim2.new(0, 40, 0, 40)
+avatarImg.Position = UDim2.new(0, 10, 0, 8)
+avatarImg.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+avatarImg.BorderSizePixel = 0
+avatarImg.Parent = mainFrame
+
+local imgCorner = Instance.new("UICorner")
+imgCorner.CornerRadius = UDim.new(1, 0)
+imgCorner.Parent = avatarImg
+
+-- Labels Info
+local nameLabel = Instance.new("TextLabel")
+nameLabel.Size = UDim2.new(0, 190, 0, 18)
+nameLabel.Position = UDim2.new(0, 58, 0, 9)
+nameLabel.BackgroundTransparency = 1
+nameLabel.Font = Enum.Font.GothamBold
+nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+nameLabel.TextSize = 11
+nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+nameLabel.Parent = mainFrame
+
+local ageLabel = Instance.new("TextLabel")
+ageLabel.Size = UDim2.new(0, 190, 0, 16)
+ageLabel.Position = UDim2.new(0, 58, 0, 27)
+ageLabel.BackgroundTransparency = 1
+ageLabel.Font = Enum.Font.Gotham
+ageLabel.TextColor3 = Color3.fromRGB(200, 200, 210)
+ageLabel.TextSize = 10
+ageLabel.TextXAlignment = Enum.TextXAlignment.Left
+ageLabel.Parent = mainFrame
+
+-- Tombol Spawn Obunga (Pengganti Teleport)
+local spawnObungaBtn = Instance.new("TextButton")
+spawnObungaBtn.Size = UDim2.new(0, 110, 0, 24)
+spawnObungaBtn.Position = UDim2.new(0, 15, 0, 53)
+spawnObungaBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 200)
+spawnObungaBtn.Font = Enum.Font.GothamBold
+spawnObungaBtn.Text = "SPAWN OBUNGA"
+spawnObungaBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+spawnObungaBtn.TextSize = 10
+spawnObungaBtn.Parent = mainFrame
+Instance.new("UICorner", spawnObungaBtn).CornerRadius = UDim.new(0, 6)
+
+-- Tombol Laser Badan
+local laserBtn = Instance.new("TextButton")
+laserBtn.Size = UDim2.new(0, 110, 0, 24)
+laserBtn.Position = UDim2.new(0, 130, 0, 53)
+laserBtn.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+laserBtn.Font = Enum.Font.GothamBold
+laserBtn.Text = "BODY LASER"
+laserBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+laserBtn.TextSize = 10
+laserBtn.Parent = mainFrame
+Instance.new("UICorner", laserBtn).CornerRadius = UDim.new(0, 6)
+
+-- Tombol Play / Stop & Close di Baris Bawah Card
+local playStopBtn = Instance.new("TextButton")
+playStopBtn.Size = UDim2.new(0, 110, 0, 24)
+playStopBtn.Position = UDim2.new(0, 15, 0, 82)
+playStopBtn.BackgroundColor3 = Color3.fromRGB(220, 160, 40)
+playStopBtn.Font = Enum.Font.GothamBold
+playStopBtn.Text = "STOP"
+playStopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+playStopBtn.TextSize = 11
+playStopBtn.Parent = mainFrame
+Instance.new("UICorner", playStopBtn).CornerRadius = UDim.new(0, 6)
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 110, 0, 24)
+closeBtn.Position = UDim2.new(0, 130, 0, 82)
+closeBtn.BackgroundColor3 = Color3.fromRGB(240, 70, 70)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.Text = "CLOSE"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.TextSize = 11
+closeBtn.Parent = mainFrame
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
+
+-- Tombol Navigasi Bawah (<, RESET, >)
+local navContainer = Instance.new("Frame")
+navContainer.Size = UDim2.new(0, 260, 0, 40)
+navContainer.Position = UDim2.new(0.5, -130, 1, -55)
+navContainer.BackgroundTransparency = 1
+navContainer.Parent = gui
+
+local function createNavButton(text, pos, size, color)
+    local btn = Instance.new("TextButton")
+    btn.Size = size
+    btn.Position = pos
+    btn.BackgroundColor3 = color
+    btn.Font = Enum.Font.GothamBold
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Parent = navContainer
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    return btn
+end
+
+local prevBtn = createNavButton("<", UDim2.new(0, 0, 0, 0), UDim2.new(0, 60, 0, 38), Color3.fromRGB(110, 90, 230))
+prevBtn.TextSize = 18
+
+local resetBtn = createNavButton("RESET", UDim2.new(0, 68, 0, 0), UDim2.new(0, 115, 0, 38), Color3.fromRGB(60, 180, 100))
+resetBtn.TextSize = 14
+
+local nextBtn = createNavButton(">", UDim2.new(0, 190, 0, 0), UDim2.new(0, 60, 0, 38), Color3.fromRGB(110, 90, 230))
+nextBtn.TextSize = 18
+
+-- Logika Spectate
+local playerList = {}
+local currentIndex = 1
+local isSpectating = true
+
+local function updatePlayerList()
+    playerList = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            table.insert(playerList, p)
+        end
+    end
+end
+
+local function updateSpectate()
+    if not isSpectating then return end
+    updatePlayerList()
+    if #playerList == 0 then
+        nameLabel.Text = "Username: None"
+        ageLabel.Text = "Account Age: 0 days"
+        avatarImg.Image = ""
+        Camera.CameraSubject = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+        return
+    end
+    
+    if currentIndex > #playerList then currentIndex = 1 end
+    if currentIndex < 1 then currentIndex = #playerList end
+    
+    local target = playerList[currentIndex]
+    if target and target.Character and target.Character:FindFirstChild("Humanoid") then
+        nameLabel.Text = "Username: " .. target.Name
+        pcall(function()
+            ageLabel.Text = "Account Age: " .. target.AccountAge .. " days"
+        end)
+        
+        local content, isReady = Players:GetUserThumbnailAsync(target.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
+        if isReady then
+            avatarImg.Image = content
+        end
+        
+        Camera.CameraSubject = target.Character.Humanoid
+    end
+end
+
+prevBtn.MouseButton1Click:Connect(function()
+    if isSpectating then
+        currentIndex = currentIndex - 1
+        updateSpectate()
+    end
+end)
+
+nextBtn.MouseButton1Click:Connect(function()
+    if isSpectating then
+        currentIndex = currentIndex + 1
+        updateSpectate()
+    end
+end)
+
+resetBtn.MouseButton1Click:Connect(function()
+    isSpectating = false
+    playStopBtn.Text = "PLAY"
+    playStopBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        Camera.CameraSubject = LocalPlayer.Character.Humanoid
+    end
+end)
+
+playStopBtn.MouseButton1Click:Connect(function()
+    isSpectating = not isSpectating
+    if isSpectating then
+        playStopBtn.Text = "STOP"
+        playStopBtn.BackgroundColor3 = Color3.fromRGB(220, 160, 40)
+        updateSpectate()
+    else
+        playStopBtn.Text = "PLAY"
+        playStopBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            Camera.CameraSubject = LocalPlayer.Character.Humanoid
+        end
+    end
+end)
+
+-- Fitur Tombol: Spawn Obunga Raksasa di Map
+spawnObungaBtn.MouseButton1Click:Connect(function()
+    local npc = Instance.new("Model")
+    npc.Name = "GiantObunga"
+    
+    local hrp = Instance.new("Part")
+    hrp.Name = "HumanoidRootPart"
+    hrp.Size = Vector3.new(12, 18, 12)
+    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    hrp.Position = myRoot and (myRoot.Position + Vector3.new(0, 10, 15)) or Vector3.new(0, 10, 0)
+    hrp.Parent = npc
+    
+    local humanoid = Instance.new("Humanoid")
+    humanoid.MaxHealth = 999999
+    humanoid.Health = 999999
+    humanoid.Parent = npc
+    
+    npc.PrimaryPart = hrp
+    npc.Parent = Workspace
+    
+    -- Gerak muter-muter
+    task.spawn(function()
+        local points = {hrp.Position + Vector3.new(40,0,40), hrp.Position + Vector3.new(-40,0,40)}
+        local idx = 1
+        while npc and npc.Parent do
+            humanoid:MoveTo(points[idx])
+            task.wait(3)
+            idx = idx == 1 and 2 or 1
+        end
+    end)
+end)
+
+-- Fitur Tombol: Laser Menempel di Badan Sendiri
+laserBtn.MouseButton1Click:Connect(function()
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hrp and not char:FindFirstChild("BodyLaser") then
+        local laser = Instance.new("Part")
+        laser.Name = "BodyLaser"
+        laser.Size = Vector3.new(2, 2, 20)
+        laser.BrickColor = BrickColor.new("Bright red")
+        laser.Material = Enum.Material.Neon
+        laser.CanCollide = false
+        laser.Parent = char
+        
+        local weld = Instance.new("WeldConstraint")
+        weld.Part0 = hrp
+        weld.Part1 = laser
+        weld.Parent = laser
+        
+        laser.CFrame = hrp.CFrame * CFrame.new(0, 3, -10)
+    end
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    Camera.CameraSubject = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+    gui:Destroy()
+end)
+
+updateSpectate()
