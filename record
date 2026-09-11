@@ -1,16 +1,169 @@
-RecBtn.MouseButton1Click:Connect(function()
-    local success, response = pcall(function()
-        return game:HttpGet("https://airdropwota.io/r1.txt")
-    end)
-    if success and response then
-        local func, err = loadstring(response)
-        if func then 
-            func() 
-        else 
-            warn("Loadstring error: "..tostring(err)) 
+-- Record standalone
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+local GUI_NAME = "NixxStandaloneRecordGui"
+local RECORD_URL = "https://airdropwota.io/r1.txt"
+
+local oldGui = PlayerGui:FindFirstChild(GUI_NAME)
+if oldGui then
+    oldGui:Destroy()
+end
+
+local RecBtn = nil
+local RecordRunning = false
+
+local function SetRecordState(text, color)
+    if not RecBtn or not RecBtn.Parent then return end
+    RecBtn.Text = text
+    RecBtn.BackgroundColor3 = color
+end
+
+local function RunRecordScript()
+    if RecordRunning then return end
+    RecordRunning = true
+    SetRecordState("Record: ...", Color3.fromRGB(120, 100, 35))
+
+    local success, result = pcall(function()
+        local response = game:HttpGet(RECORD_URL)
+        if type(response) ~= "string" or response == "" then
+            error("response kosong")
         end
-    else 
-        warn("HttpGet failed for Rec") 
+
+        local func, compileError = loadstring(response)
+        if type(func) ~= "function" then
+            error("loadstring gagal: " .. tostring(compileError))
+        end
+
+        local executed, runtimeError = pcall(func)
+        if not executed then
+            error("script record error: " .. tostring(runtimeError))
+        end
+
+        return true
+    end)
+
+    RecordRunning = false
+    if success then
+        SetRecordState("Record: OK", Color3.fromRGB(0, 150, 90))
+        task.delay(2, function()
+            if RecBtn and RecBtn.Parent then
+                SetRecordState("Record", Color3.fromRGB(35, 35, 45))
+            end
+        end)
+    else
+        warn("[NIXX Record] " .. tostring(result))
+        SetRecordState("Record: ERROR", Color3.fromRGB(160, 45, 55))
+        task.delay(2, function()
+            if RecBtn and RecBtn.Parent then
+                SetRecordState("Record", Color3.fromRGB(35, 35, 45))
+            end
+        end)
+    end
+end
+
+local RecordGui = Instance.new("ScreenGui")
+RecordGui.Name = GUI_NAME
+RecordGui.ResetOnSpawn = false
+RecordGui.Parent = PlayerGui
+
+local RecordFrame = Instance.new("Frame")
+RecordFrame.Size = UDim2.fromOffset(158, 38)
+RecordFrame.Position = UDim2.new(0, 20, 0.5, 175)
+RecordFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 25)
+RecordFrame.BorderSizePixel = 0
+RecordFrame.Active = true
+RecordFrame.Parent = RecordGui
+
+local FrameCorner = Instance.new("UICorner")
+FrameCorner.CornerRadius = UDim.new(0, 7)
+FrameCorner.Parent = RecordFrame
+
+RecBtn = Instance.new("TextButton")
+RecBtn.Size = UDim2.fromOffset(100, 28)
+RecBtn.Position = UDim2.fromOffset(20, 5)
+RecBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+RecBtn.BorderSizePixel = 0
+RecBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+RecBtn.TextSize = 11
+RecBtn.Font = Enum.Font.GothamBold
+RecBtn.Text = "Record"
+RecBtn.Parent = RecordFrame
+
+local ButtonCorner = Instance.new("UICorner")
+ButtonCorner.CornerRadius = UDim.new(0, 5)
+ButtonCorner.Parent = RecBtn
+
+local DragHandle = Instance.new("TextButton")
+DragHandle.Size = UDim2.fromOffset(14, 28)
+DragHandle.Position = UDim2.fromOffset(3, 5)
+DragHandle.BackgroundTransparency = 1
+DragHandle.BorderSizePixel = 0
+DragHandle.Text = "≡"
+DragHandle.TextColor3 = Color3.fromRGB(150, 150, 165)
+DragHandle.TextSize = 16
+DragHandle.Font = Enum.Font.GothamBold
+DragHandle.Parent = RecordFrame
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.fromOffset(28, 28)
+CloseBtn.Position = UDim2.fromOffset(125, 5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(150, 45, 55)
+CloseBtn.BorderSizePixel = 0
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextSize = 12
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Parent = RecordFrame
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 5)
+CloseCorner.Parent = CloseBtn
+
+local dragging = false
+local dragInput = nil
+local dragStart = nil
+local startPosition = nil
+
+DragHandle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPosition = RecordFrame.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
     end
 end)
-```[cite: 1]
+
+DragHandle.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        RecordFrame.Position = UDim2.new(
+            startPosition.X.Scale,
+            startPosition.X.Offset + delta.X,
+            startPosition.Y.Scale,
+            startPosition.Y.Offset + delta.Y
+        )
+    end
+end)
+
+RecBtn.MouseButton1Click:Connect(RunRecordScript)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    RecordGui:Destroy()
+end)
