@@ -1,0 +1,84 @@
+-- =========================================================
+-- NIXX ESP LINE FEATURE
+-- Command ID: esp_line
+--
+-- Feature terpisah dengan UI Toggle seperti Orbit Target.
+-- Tempel ke script utama setelah Services dan TargetTab dibuat.
+--
+-- Dependency dari script utama:
+-- Services, LocalPlayer, Toggles, Values, TargetTab, Notify
+-- =========================================================
+
+Toggles.ESPLine = false
+Values.ESPLineMaxDistance = Values.ESPLineMaxDistance or 20000
+
+local ESPPlayers = Services.Players or game:GetService("Players")
+local ESPLines = {}
+
+local function CreateESPLine()
+    local line = Drawing.new("Line")
+    line.Thickness = 1.5
+    line.Color = Color3.fromRGB(0, 255, 120)
+    line.Visible = false
+    return line
+end
+
+local function HideAllESPLines()
+    for _, line in pairs(ESPLines) do
+        line.Visible = false
+    end
+end
+
+Services.RunService.RenderStepped:Connect(function()
+    if not Toggles.ESPLine then
+        HideAllESPLines()
+        return
+    end
+
+    local camera = workspace.CurrentCamera
+    if not camera then
+        HideAllESPLines()
+        return
+    end
+
+    for _, player in pairs(ESPPlayers:GetPlayers()) do
+        local character = player.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+
+        if player ~= LocalPlayer and humanoid and humanoid.Health > 0 and root then
+            local distance = (root.Position - camera.CFrame.Position).Magnitude
+
+            if distance <= Values.ESPLineMaxDistance then
+                local screenPosition, onScreen =
+                    camera:WorldToViewportPoint(root.Position)
+
+                if not ESPLines[player] then
+                    ESPLines[player] = CreateESPLine()
+                end
+
+                ESPLines[player].From = Vector2.new(
+                    camera.ViewportSize.X / 2,
+                    camera.ViewportSize.Y
+                )
+                ESPLines[player].To =
+                    Vector2.new(screenPosition.X, screenPosition.Y)
+                ESPLines[player].Visible = onScreen
+            elseif ESPLines[player] then
+                ESPLines[player].Visible = false
+            end
+        elseif ESPLines[player] then
+            ESPLines[player].Visible = false
+        end
+    end
+end)
+
+-- UI persis seperti toggle Orbit Target
+TargetTab:Toggle({
+    Title = "📍 ESP Line",
+    Value = false,
+    Callback = function(state)
+        Toggles.ESPLine = state
+        Notify(state and "ESP Line aktif" or "ESP Line dimatikan")
+    end
+})
